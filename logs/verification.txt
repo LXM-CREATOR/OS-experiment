@@ -1,0 +1,6 @@
+PASS: build ELF and BIN
+PASS: BIN boot banner
+PASS: six reset ROM instructions and M-mode firmware at 0x80000000
+PASS: preloaded kernel memory watchpoint and S-mode entry at 0x80200000
+PASS: GDB entry, S-mode, 8 KiB stack, BSS call, printf, SBI ecall
+NOTE: Lab1 guide requires two exercises and a Markdown report, not make grade.

@@ -1,0 +1,73 @@
+The target architecture is set to "riscv:rv64".
+0x0000000000001000 in ?? ()
+RESET pc=0x1000
+=> 0x1000:	auipc	t0,0x0
+   0x1004:	addi	a2,t0,40
+   0x1008:	csrr	a0,mhartid
+   0x100c:	ld	a1,32(t0)
+   0x1010:	ld	t0,24(t0)
+   0x1014:	jr	t0
+PRELOADED_KERNEL before CPU execution
+   0x80200000 <kern_entry>:	auipc	sp,0x3
+   0x80200004 <kern_entry+4>:	mv	sp,sp
+   0x80200008 <kern_entry+8>:	j	0x8020000a <kern_init>
+   0x8020000a <kern_init>:	auipc	a0,0x3
+0x0000000000001004 in ?? ()
+ROM_STEP1 pc=0x1004 t0=0x1000
+0x0000000000001008 in ?? ()
+ROM_STEP2 pc=0x1008 a2=0x1028
+0x000000000000100c in ?? ()
+ROM_STEP3 pc=0x100c a0=0
+0x0000000000001010 in ?? ()
+ROM_STEP4 pc=0x1010 a1=0x87e00000
+0x0000000000001014 in ?? ()
+ROM_STEP5 pc=0x1014 t0=0x80000000
+0x0000000080000000 in ?? ()
+OPENSBI pc=0x80000000 priv=3
+=> 0x80000000:	add	s0,a0,zero
+   0x80000004:	add	s1,a1,zero
+   0x80000008:	add	s2,a2,zero
+   0x8000000c:	jal	ra,0x80000580
+   0x80000010:	add	a6,a0,zero
+   0x80000014:	add	a0,s0,zero
+Hardware watchpoint 1: *(unsigned int*)0x80200000
+Hardware assisted breakpoint 2 at 0x80200000: file kern/init/entry.S, line 7.
+
+Breakpoint 2, kern_entry () at kern/init/entry.S:7
+7	    la sp, bootstacktop
+ENTRY pc=0x80200000 priv=1
+PRELOAD_CHECK kernel was already present at reset; watchpoint did not fire
+=> 0x80200000 <kern_entry>:	auipc	sp,0x3
+   0x80200004 <kern_entry+4>:	mv	sp,sp
+   0x80200008 <kern_entry+8>:	j	0x8020000a <kern_init>
+   0x8020000a <kern_init>:	auipc	a0,0x3
+9	    tail kern_init
+STACK sp=0x80203000 top=0x80203000 size=8192
+Hardware assisted breakpoint 3 at 0x8020001c: file kern/init/init.c, line 8.
+
+Breakpoint 3, 0x000000008020001c in kern_init () at kern/init/init.c:8
+8	    memset(edata, 0, end - edata);
+KERN_INIT pc=0x8020001c
+Hardware assisted breakpoint 4 at 0x802004ae: file libs/string.c, line 275.
+
+Breakpoint 4, memset (s=0x80203008, c=c@entry=0 '\000', n=0) at libs/string.c:275
+275	    while (n -- > 0) {
+BSS start=0x80203008 end=0x80203008 dst=0x80203008 value=0 length=0
+kern_init () at kern/init/init.c:11
+11	    cprintf("%s\n\n", message);
+Value returned is $1 = (void *) 0x80203008
+Hardware assisted breakpoint 5 at 0x80200056: file kern/libs/stdio.c, line 40.
+
+Breakpoint 5, cprintf (fmt=fmt@entry=0x802004e0 "%s\n\n") at kern/libs/stdio.c:40
+40	    va_start(ap, fmt);
+CPRINTF pc=0x80200056
+0x802004e0:	"%s\n\n"
+Hardware assisted breakpoint 6 at 0x8020048a: file libs/sbi.c, line 18.
+
+Breakpoint 6, 0x000000008020048a in sbi_call (arg2=0, arg1=0, arg0=<optimized out>, sbi_type=1) at libs/sbi.c:18
+18	    __asm__ volatile (
+SBI_BEFORE pc=0x8020048a priv=1 a7=1 a0=40
+0x0000000080000428 in ?? ()
+SBI_TRAP pc=0x80000428 priv=3 mepc=0x8020048a mcause=9
+PASS: entry, S-mode, stack, BSS call, printf, SBI ecall
+[Inferior 1 (process 1) detached]
