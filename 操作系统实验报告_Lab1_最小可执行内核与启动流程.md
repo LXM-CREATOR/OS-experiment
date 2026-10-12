@@ -297,39 +297,71 @@ make qemu
 la sp, bootstacktop
 tail kern_init
 ```
+### 5.2 源码与内核栈布局
 
-### 5.2 `la sp, bootstacktop`
-
-`la` 是 RISC-V 汇编伪指令，全称为 **Load Address**。
-
-其作用是：
-
-> 将符号 `bootstacktop` 对应的地址加载到栈指针寄存器 `sp` 中。
-
-在实际机器指令层面，`la` 通常会根据目标地址和当前代码位置展开为类似：
+`kern/init/entry.S` 中与本练习有关的代码如下：
 
 ```asm
-auipc
-addi
+.globl kern_entry
+kern_entry:
+    la sp, bootstacktop
+    tail kern_init
+
+.section .data
+    .align PGSHIFT
+.global bootstack
+bootstack:
+    .space KSTACKSIZE
+.global bootstacktop
+bootstacktop:
 ```
 
-这样的指令组合。
+内核栈的大小由 `kern/mm/mmu.h` 和 `kern/mm/memlayout.h` 共同确定：
+
+```c
+#define PGSIZE      4096
+#define PGSHIFT     12
+#define KSTACKPAGE  2
+#define KSTACKSIZE  (KSTACKPAGE * PGSIZE)
+```
 
 因此：
 
-```asm
-la sp, bootstacktop
+```text
+KSTACKSIZE = 2 × 4096 = 8192 Byte = 8 KiB
 ```
 
-最终完成：
+`.align PGSHIFT` 将 `bootstack` 按照 `2^12 = 4096` 字节对齐。当前构建产物中的符号地址如下：
+
+| 符号 | 地址 | 含义 |
+|---|---:|---|
+| `kern_entry` | `0x80200000` | 内核汇编入口 |
+| `kern_init` | `0x8020000a` | C语言内核入口 |
+| `bootstack` | `0x80201000` | 内核栈低地址边界 |
+| `bootstacktop` | `0x80203000` | 内核栈高地址边界和初始栈顶 |
+
+内核栈占用区间为 `[0x80201000, 0x80203000)`，大小正好为 `0x2000`，即8192字节。RISC-V栈按照调用约定从高地址向低地址增长，因此入口代码将`sp`设置为高地址端的`bootstacktop`，后续压栈时再向低地址移动。
+
+### 5.3 `la sp, bootstacktop` 的作用
+
+`la`是RISC-V汇编伪指令，全称为Load Address。它把符号`bootstacktop`的地址加载到栈指针寄存器`sp`，而不是读取该地址中保存的数据。
+
+当前内核的实际反汇编结果为：
+
+```asm
+0000000080200000 <kern_entry>:
+    80200000: 00003117    auipc sp,0x3
+    80200004: 00010113    mv    sp,sp
+```
+
+这里的`mv sp,sp`是反汇编器对`addi sp,sp,0`显示的别名。两条机器指令配合完成PC相对地址计算，最终得到：
 
 ```text
-bootstacktop 地址
-      ↓
-    sp 寄存器
+sp = 0x80200000 + 0x3000 = 0x80203000
+   = bootstacktop
 ```
 
-#### 为什么必须在调用 C 函数前设置 `sp`？
+#### 必须在调用 C 函数前设置 `sp`
 
 C 语言函数运行时需要使用栈保存：
 
@@ -339,7 +371,7 @@ C 语言函数运行时需要使用栈保存：
 - 保存寄存器；
 - 临时数据。
 
-如果 `sp` 没有被初始化，那么 C 函数执行过程中对栈的访问就可能发生在错误的内存位置，从而导致不可预测的行为甚至程序崩溃。
+如果 `sp` 没有被初始化，继续使用OpenSBI遗留的栈指针,那么 C 函数执行过程中对栈的访问就可能发生在错误的内存位置，从而导致不可预测的行为甚至程序崩溃。
 
 因此，设置内核栈是从汇编入口进入 C 语言环境的重要准备工作。
 
@@ -382,77 +414,114 @@ tail kern_init
 
 ---
 
-### 5.4 两条指令的整体关系
+### 5.4 `tail kern_init` 的作用
 
-这两条指令实际上完成了：
-
-```text
-kern_entry
-   │
-   ├── la sp, bootstacktop
-   │       ↓
-   │   初始化内核栈
-   │
-   └── tail kern_init
-           ↓
-       进入 C 语言内核
-```
-
-因此可以概括为：
-
-| 指令 | 主要作用 |
-|------|----------|
-| `la sp, bootstacktop` | 初始化内核栈指针 |
-| `tail kern_init` | 跳转到 C 语言内核入口 |
-
----
-
-### 5.5 反汇编验证
-
-在 WSL 终端执行：
-
-```bash
-riscv64-unknown-elf-objdump -d bin/kernel | less
-```
-
-找到 `kern_entry` 部分，可以看到类似：
+`tail`也是一条伪指令，用于进行尾调用。它把PC修改为`kern_init`的地址，但不把返回地址写入`ra`。当前内核中`kern_init`与`kern_entry`距离很近，因此链接器将其生成为一条压缩跳转指令：
 
 ```asm
-0000000080200000 <kern_entry>:
-    80200000:   00002117            auipc   sp,0x2
-    80200004:   ff010113            addi    sp,sp,-16
-    80200008:   00000097            auipc   ra,0x0
-    8020000c:   008080e7            jalr    8(ra)
+80200008: a009    j 8020000a <kern_init>
 ```
 
-> **注意：** 具体反汇编结果会受到链接地址、编译器版本以及代码布局影响，因此实际偏移量应以实验环境中的反汇编结果为准。
+这条指令只改变PC，不创建新的返回关系。这样处理是合理的，因为`kern_entry`只负责建立C语言运行环境，而`kern_init`被声明为`noreturn`，完成初始化和输出后会进入死循环，不需要返回到`kern_entry`。
 
----
+普通函数调用与这里的尾调用可以对比如下：
 
-### 5.6 GDB 验证 `sp` 和 `pc` 变化
+| 调用方式 | 是否保存返回地址 | 是否需要返回调用点 |
+|---|---|---|
+| `call kern_init` | 是，写入`ra` | 通常需要 |
+| `tail kern_init` | 否 | 不需要 |
 
-在 GDB 中设置断点：
-
-```gdb
-(gdb) break kern_entry
-(gdb) continue
-(gdb) info registers sp pc
-(gdb) stepi
-(gdb) info registers sp pc
-```
-
-通过逐条执行指令，可以观察：
-
-1. 进入 `kern_entry` 时，PC 指向内核入口地址。
-2. 执行 `la sp, bootstacktop` 后，`sp` 被设置为内核栈顶地址。
-3. 执行 `tail kern_init` 后，PC 跳转到 `kern_init`。
-4. 内核由汇编入口正式进入 C 语言初始化阶段。
-
-截图位置：
+### 5.5 两条指令的整体关系
 
 ```text
-./images/entry/03_gdb_sp_pc.png
+OpenSBI将控制权交给0x80200000
+                ↓
+            kern_entry
+                ↓
+la sp, bootstacktop：sp = 0x80203000 --初始化内核栈
+                ↓
+tail kern_init：pc = 0x8020000a --进入 C 语言内核
+                ↓
+            kern_init
+                ↓
+清理.bss、输出启动信息并进入死循环
 ```
+
+两条指令共同完成了从固件提供的S模式执行环境到内核自身C语言运行环境的过渡：第一条指令建立内核栈，第二条指令进入C语言初始化入口。
+
+### 5.6 反汇编和符号验证
+
+在WSL终端中执行：
+
+```bash
+riscv64-unknown-elf-objdump -d bin/kernel | sed -n '/<kern_entry>:/,+5p'
+riscv64-unknown-elf-nm -n bin/kernel | grep -E 'kern_entry|kern_init|bootstack'
+```
+
+第一条命令用于显示`kern_entry`的真实机器指令，第二条命令用于核对入口函数和内核栈符号的地址。图5-1表明，`la`实际展开为`auipc`和`mv`，`tail`实际生成为跳转到`0x8020000a`的`j`指令。
+
+![kern_entry反汇编及栈符号地址](./images/entry/01_entry_disassembly.png)
+
+图5-2给出了当前构建产物中的实际符号地址。`bootstacktop - bootstack = 0x2000 = 8192`字节，与`KSTACKSIZE`的宏定义一致。
+
+![kern_entry、kern_init及内核栈符号地址](./images/entry/02_stack_symbols.png)
+
+### 5.7 GDB验证`sp`和`pc`变化
+
+首先执行`bash tools/entry-stack-debug.sh`启动暂停状态的QEMU，在另一个终端执行`make gdb`连接。随后在GDB中执行：
+
+```gdb
+break kern_entry
+continue
+disassemble /r kern_entry
+info registers pc sp
+p/x &bootstack
+p/x &bootstacktop
+p/d (char *)&bootstacktop - (char *)&bootstack
+```
+
+在执行入口指令前，`pc`应为`0x80200000`；此时`sp`仍是OpenSBI移交控制权时留下的值，尚未指向内核自己的栈。
+
+![执行入口指令前的pc和sp](./images/entry/03_gdb_entry_before.png)
+
+接着逐条执行：
+
+```gdb
+stepi
+info registers pc sp
+stepi
+info registers pc sp
+stepi
+info registers pc sp
+```
+
+关键变化如下：
+
+| 执行阶段 | `pc` | `sp` | 说明 |
+|---|---:|---:|---|
+| 到达`kern_entry` | `0x80200000` | OpenSBI遗留值 | 尚未建立内核栈 |
+| 执行`la`对应的两条机器指令后 | `0x80200008` | `0x80203000` | `sp`等于`bootstacktop` |
+| 执行`tail`对应的跳转后 | `0x8020000a` | `0x80203000` | PC进入`kern_init`，栈保持不变 |
+
+图5-4显示，执行`la`展开后的第一条机器指令时，`sp`已经得到`0x80203000`；执行第二条机器指令后，`pc`到达`0x80200008`，且`sp`与`bootstacktop`相等。
+
+![执行la展开指令后的sp和pc](./images/entry/04_gdb_after_la.png)
+
+图5-5显示，执行`tail kern_init`对应的跳转指令后，`pc`变为`0x8020000a`，与`kern_init`地址一致；`sp`保持为`0x80203000`，说明控制权已经在内核栈保持有效的情况下进入C语言入口。
+
+![执行tail后进入kern_init](./images/entry/05_gdb_after_tail.png)
+
+仓库提供的自动验证日志还记录了：
+
+```text
+STACK sp=0x80203000 top=0x80203000 size=8192
+```
+
+该结果同时验证了`sp`、`bootstacktop`和`KSTACKSIZE`三者的关系。
+
+### 5.8 练习1结论
+
+`la sp, bootstacktop`把内核栈顶地址加载到`sp`，使内核不再依赖OpenSBI使用的栈，并为执行C函数建立符合RISC-V调用约定的栈环境。`tail kern_init`在不保存返回地址的情况下跳转到C语言入口。由于`kern_init`不会返回，这种尾调用既符合控制流程，也避免了无意义的返回地址保存。GDB验证表明，入口代码执行后`sp`变为`0x80203000`，随后`pc`从`0x80200008`跳转到`kern_init`所在的`0x8020000a`，与源码和反汇编结果一致。
 
 ---
 
