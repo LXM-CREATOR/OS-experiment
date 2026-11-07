@@ -58,7 +58,7 @@
 
     .macro RESTORE_ALL
 
-    # lab3 function1: restore the trapframe built by SAVE_ALL.
+    # lab3 function1 ----2411438: restore the trapframe built by SAVE_ALL.
     # sstatus/sepc must be written back before sret, because sret uses
     # them to select the privilege level and the return address.
     LOAD s1, 32*REGBYTES(sp)
@@ -107,7 +107,7 @@
 __alltraps:
     SAVE_ALL
 
-    # lab3 function1: the Trap frame is at the top of the current stack,
+    # lab3 function1 ----2411438: the Trap frame is at the top of the current stack,
     # so sp itself is the pointer that has to be passed to trap().
     # trap() follows the RISC-V calling convention and keeps sp unchanged,
     # therefore sp is still the base of the trapframe after it returns.
