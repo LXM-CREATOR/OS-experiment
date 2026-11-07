@@ -80,7 +80,7 @@ void print_regs(struct pushregs *gpr) {
     cprintf("  t6       0x%08x\n", gpr->t6);
 }
 
-//lab3 function2
+//lab3 function2 ----2411513
 
 /* *
  * trap_insn_len - length in bytes of the instruction at @epc.
