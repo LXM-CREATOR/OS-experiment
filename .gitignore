@@ -1,0 +1,10 @@
+# build artifacts
+obj/
+bin/
+
+# grading / qemu logs
+.qemu*.out
+.gdb.in
+
+# handin package
+*.tar.gz
