@@ -393,6 +393,7 @@ prompt 采用"角色 + 上下文 + spec + 约束 + 输出格式 + 自检"的结�
 | 7 | 调度测试卡死：`[Test Schedule]` 之后的断言不返回 | 切回 `idleproc` 时它的 `need_resched` 已被清零，`cpu_idle` 再也不调 `schedule` | 在时钟中断里给 `current->need_resched` 置 1，让时间片到期后能重新进入调度器 |
 | 8 | `make grade` 三项全 `no $qemu_out` | WSL 里没有 `riscv64-unknown-elf-gdb`；用 `gdb-multiarch` 直接连 QEMU 会报 `Truncated register 37 in remote 'g' packet`（没有指定 RISC-V 架构），gdb 立刻退出并把 QEMU 杀掉 | 新增 `tools/gdb-riscv.sh`（`gdb-multiarch -ex 'set architecture riscv:rv64'`），Makefile 在找不到 `$(GCCPREFIX)gdb` 时自动回退到它 |
 | 9 | `check_alloc_page() succeeded!` 打印两次 | `default_check()` 里重复打印 | 删掉管理器里的重复打印，保留 `pmm.c` 中的那一句 |
+| 10 | 从仓库重新克隆到 Windows 后，在 WSL 里 `sh tools/grade.sh` 报 `Syntax error: ")" unexpected` | Windows 的 `core.autocrlf=true` 在检出时把脚本/Makefile 转成了 CRLF | 新增 `.gitattributes`（`* text=auto eol=lf`），把仓库和检出统一为 LF；重新克隆后 `make grade` 恢复正常 |
 
 第 7 条是最有代表性的"AI 生成代码能编译但跑不起来"的 bug：从代码上看 `cpu_idle` 完全符合"检测到 need_resched 才调度"的描述，但忽略了"谁会把 `need_resched` 重新置 1"。这类问题只能靠跑测试、看现象来发现，也说明**spec 里必须写清楚"调度点由谁触发"**。
 
@@ -512,6 +513,7 @@ To U: "en.., Bye, Bye. :)"
 
 - 新增 `tools/gdb-riscv.sh`：先 `set architecture riscv:rv64` 再执行传入参数（否则 QEMU 的 gdbstub 描述会被 gdb 拒绝）；
 - `Makefile` 在 `command -v $(GCCPREFIX)gdb` 为空时自动把 `GDB` 设为 `sh tools/gdb-riscv.sh`，在装有交叉 gdb 的环境里行为不变。
+- 仓库新增 `.gitattributes`（`* text=auto eol=lf`）。原因是 Windows 上 `core.autocrlf=true` 会在检出时把 `Makefile`、`tools/grade.sh`、`*.py`、`*.S` 转成 CRLF，而它们最终都要在 WSL 里被 `make`/`sh`/`python3` 执行，CRLF 会直接导致 `Syntax error`。统一 LF 后，"在 Windows 克隆 → 在 WSL 里 `make grade`"这条链路才可以复现。
 
 ---
 
