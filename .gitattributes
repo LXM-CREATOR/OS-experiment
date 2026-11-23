@@ -1,0 +1,11 @@
+# 本实验的代码最终都在 WSL / Linux 下用 make 编译、用 sh/python 执行，
+# 因此仓库内统一使用 LF 换行，避免 Windows 上的 core.autocrlf=true
+# 在检出时把脚本（Makefile、grade.sh、*.py、*.S）改成 CRLF 而导致
+# "sh tools/grade.sh: not found / Syntax error" 之类的错误。
+* text=auto eol=lf
+
+# 二进制文件不做换行转换
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
