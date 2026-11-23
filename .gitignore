@@ -1,0 +1,19 @@
+# 编译产物
+/bin/
+/obj/
+*.o
+*.d
+*.img
+*.out
+*.sym
+*.asm
+
+# 调试/评分临时文件
+.gdb.in
+.qemu.out
+*.log
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
